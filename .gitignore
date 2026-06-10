@@ -1,5 +1,5 @@
 # Ignore data input, intermediate, and output directories
-data/input/*.json
+data/input/Running Dinner – WiSe2526.json
 data/input/uploads/*.json
 data/intermediate/*.db
 data/output/emails/*.txt
@@ -12,11 +12,11 @@ data/output/runs/
 __pycache__/
 *.pyc
 *.DS_Store
+.gitignore
 
 # Ignore Jupyter Notebook checkpoints
 .ipynb_checkpoints/
 
 # Ignore virtual environment directories
 .venv/
-
 
