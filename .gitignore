@@ -4,6 +4,7 @@ data/input/uploads/*.json
 data/intermediate/*.db
 data/output/emails/*.txt
 data/output/*.json
+data/output/aggregated_map.html
 data/output/maps/*.html
 data/output/runs/
 
