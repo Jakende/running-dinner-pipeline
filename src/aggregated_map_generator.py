@@ -76,7 +76,7 @@ def generate_aggregated_map(plan: DinnerPlan, teams: List[Team], output_path: st
             
         popup_html += f"""
         <hr>
-        <b>Address:</b> {host.address_street}<br>
+        <b>Address:</b> {host.full_address}<br>
         <b>Diet:</b> {host.diet.value}<br>
         </div>
         """
@@ -128,6 +128,13 @@ def generate_aggregated_map(plan: DinnerPlan, teams: List[Team], output_path: st
         placeholder="Search for team...",
         collapsed=False,
         search_label="tooltip"
+    ).add_to(m)
+
+    plugins.OverlappingMarkerSpiderfier(
+        keep_spiderfied=True,
+        nearby_distance=30,
+        leg_weight=2.0,
+        circle_spiral_switchover=8,
     ).add_to(m)
 
     m.save(output_path)

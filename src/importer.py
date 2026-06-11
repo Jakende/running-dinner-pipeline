@@ -27,6 +27,7 @@ class DinnerImporter:
         # Mapping constants (canonical fields -> supported LimeSurvey labels and question codes)
         self.KEYS = {
             'street': ["G01Q11[SQ001]", "Adresse euer Dinner-Location in Freising [Straße]"],
+            'address_addition': ["G01Q11[SQ002]", "Adresse euer Dinner-Location in Freising [Adresszusatz]"],
             'house_number': ["G01Q11[SQ005]", "Adresse euer Dinner-Location in Freising [Hausnummer]"],
             'plz': ["G01Q11[SQ003]", "Adresse euer Dinner-Location in Freising [PLZ]"],
             'city': ["G01Q11[SQ004]", "Adresse euer Dinner-Location in Freising [Ort]"],
@@ -201,6 +202,9 @@ class DinnerImporter:
             return default
         return text
 
+    def _clean_email(self, value: str) -> str:
+        return value.strip().lower() if value else ""
+
     def _clean_street(self, street: str) -> str:
         return (
             street.replace("strase", "straße")
@@ -229,6 +233,56 @@ class DinnerImporter:
             return ""
         return house
 
+    def _is_ignored_address_note(self, value: str, street: str = "") -> bool:
+        text = value.strip()
+        if not text:
+            return True
+        if text.lower() in {".", "-", "/", "_", "x", "xx", "n/a", "na"}:
+            return True
+        if street and _normalize_key(text) == _normalize_key(street):
+            return True
+        return False
+
+    def _split_street_house(self, street: str) -> tuple[str, str]:
+        street = street.strip()
+        # Matches common German house numbers at the end, e.g. "Goethestraße 1",
+        # "Main Street 12a", "Foo-Weg 7/1". Keeps the street name separate.
+        match = re.match(r"^(?P<street>.*?\D)\s+(?P<house>\d+\s*[a-zA-Z]?(?:\s*[-/]\s*\d+\s*[a-zA-Z]?)?)$", street)
+        if not match:
+            return street, ""
+        return match.group("street").strip(), re.sub(r"\s+", "", match.group("house").strip())
+
+    def _build_address_parts(self, street: str, address_addition: str, house_field: str) -> tuple[str, str, str]:
+        street = self._clean_street(street)
+        street, house_from_street = self._split_street_house(street)
+        addition_house = self._clean_house_number(address_addition, street)
+        field_house = self._clean_house_number(house_field, street)
+
+        house = house_from_street or addition_house or field_house
+        notes = []
+
+        if address_addition and address_addition != addition_house and not self._is_ignored_address_note(address_addition, street):
+            notes.append(f"Adresszusatz: {address_addition}")
+        elif (
+            address_addition
+            and house_from_street
+            and _normalize_key(address_addition) != _normalize_key(house)
+            and not self._is_ignored_address_note(address_addition, street)
+        ):
+            notes.append(f"Adresszusatz: {address_addition}")
+
+        if house_field and house_field != field_house and not self._is_ignored_address_note(house_field, street):
+            notes.append(house_field)
+        elif (
+            house_field
+            and house != field_house
+            and _normalize_key(house_field) != _normalize_key(house)
+            and not self._is_ignored_address_note(house_field, street)
+        ):
+            notes.append(house_field)
+
+        return street, house, "; ".join(notes)
+
     def _compose_address(self, street: str, house: str, plz: str, city: str) -> str:
         street_with_house = f"{street} {house}".strip()
         return f"{street_with_house}, {plz} {city}, Germany"
@@ -244,19 +298,22 @@ class DinnerImporter:
             
             # Extract Address
             street = self._get_value(r, 'street')
+            address_addition = self._get_value(r, 'address_addition')
             house = self._get_value(r, 'house_number')
             plz = self._get_value(r, 'plz')
             city = self._get_value(r, 'city', "Freising")
             
-            if not (street and house and plz):
+            if not (street and plz):
                 logger.warning(f"Skipping response {response_id}: Incomplete address")
                 continue
 
-            # Clean common typos and tolerate address forms where the house number
-            # was entered in the street field and the house field contains notes.
-            street = self._clean_street(street)
+            # Clean common typos and tolerate address forms where house numbers
+            # were entered in the street or address-addition field.
             city = self._clean_city(city)
-            house = self._clean_house_number(house, street)
+            street, house, address_notes = self._build_address_parts(street, address_addition, house)
+
+            if not house:
+                logger.warning(f"Response {response_id}: No house number detected; using street-level address")
 
             full_address = self._compose_address(street, house, plz, city)
             addr_hash = hashlib.md5(f"{street}{house}{plz}{city}".lower().encode()).hexdigest()
@@ -287,12 +344,16 @@ class DinnerImporter:
                 val = self._get_value(r, k, allergy=True)
                 allergies[k] = val or None
 
+            location_hints = "; ".join(
+                part for part in [address_notes, self._get_value(r, 'hints')] if part
+            )
+
             team = Team(
                 id=int(response_id),
                 name1=self._get_value(r, 'name1'),
                 name2=self._get_value(r, 'name2'),
-                email1=self._get_value(r, 'email1'),
-                email2=self._get_value(r, 'email2'),
+                email1=self._clean_email(self._get_value(r, 'email1')),
+                email2=self._clean_email(self._get_value(r, 'email2')),
                 phone1=self._get_value(r, 'phone1'),
                 phone2=self._get_value(r, 'phone2'),
                 address_street=f"{street} {house}",
@@ -303,7 +364,7 @@ class DinnerImporter:
                 longitude=lon,
                 diet=diet,
                 allergies=allergies,
-                hints=self._get_value(r, 'hints'),
+                hints=location_hints,
                 language=self._get_value(r, 'language', "de")
             )
             teams.append(team)

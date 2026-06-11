@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 import threading
+from urllib.parse import quote
 from datetime import datetime
 from pathlib import Path
 
@@ -375,6 +376,11 @@ def _page(title: str, body: str) -> HTMLResponse:
     }}
     .artifact-list li {{ border-bottom: 1px solid var(--line); }}
     .artifact-list li:last-child {{ border-bottom: 0; }}
+    .artifact-row {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: stretch;
+    }}
     .artifact-list a {{
       display: block;
       padding: 10px 12px;
@@ -382,6 +388,12 @@ def _page(title: str, body: str) -> HTMLResponse:
       text-decoration: none;
       font-size: 13px;
       overflow-wrap: anywhere;
+    }}
+    .artifact-list a.send-link {{
+      border-left: 1px solid var(--line);
+      font-weight: 800;
+      white-space: nowrap;
+      background: var(--panel-soft);
     }}
     .artifact-list a:hover {{ background: var(--accent-soft); }}
     .summary-line {{
@@ -478,6 +490,24 @@ def _run_file(run_id: str, file_path: str) -> Path:
 def _slug(text: str) -> str:
     safe = "".join(ch if ch.isalnum() else "-" for ch in text).strip("-").lower()
     return "-".join(part for part in safe.split("-") if part)[:48] or "run"
+
+
+def _parse_email_draft(path: Path) -> tuple[str, str, str]:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    recipients = ""
+    subject = "Running Dinner"
+    body_start = 0
+
+    if lines and lines[0].startswith("An / To:"):
+        recipients = lines[0].split(":", 1)[1].strip()
+        body_start = 1
+    if len(lines) > 1 and lines[1].startswith("Betreff / Subject:"):
+        subject = lines[1].split(":", 1)[1].strip()
+        body_start = 2
+    while body_start < len(lines) and not lines[body_start].strip():
+        body_start += 1
+
+    return recipients, subject, "\n".join(lines[body_start:])
 
 
 def _write_initial_manifest(
@@ -786,7 +816,12 @@ def run_detail(run_id: str):
         """
 
     email_links = "".join(
-        f"<li><a href='/runs/{html.escape(run_id)}/files/emails/{html.escape(path.name)}'>{html.escape(path.name)}</a></li>"
+        f"""
+        <li class="artifact-row">
+          <a href="/runs/{html.escape(run_id)}/files/emails/{html.escape(path.name)}">{html.escape(path.name)}</a>
+          <a class="send-link" href="/runs/{html.escape(run_id)}/emails/{html.escape(path.name)}/compose">Senden</a>
+        </li>
+        """
         for path in email_files
     ) or "<li class='muted'>Keine E-Mail-Dateien vorhanden.</li>"
     map_links = "".join(
@@ -908,6 +943,16 @@ def run_artifact(run_id: str, file_path: str):
     if path.suffix == ".log" or path.suffix == ".txt" or path.suffix == ".json":
         return PlainTextResponse(path.read_text(encoding="utf-8"))
     return FileResponse(path)
+
+
+@app.get("/runs/{run_id}/emails/{filename}/compose")
+def compose_email(run_id: str, filename: str):
+    path = _run_file(run_id, f"emails/{filename}")
+    if path.suffix != ".txt":
+        raise HTTPException(status_code=400, detail="Only email draft text files can be composed.")
+    recipients, subject, body = _parse_email_draft(path)
+    mailto = f"mailto:{quote(recipients.replace(' ', ''), safe='@,;+')}?subject={quote(subject)}&body={quote(body)}"
+    return RedirectResponse(mailto, status_code=303)
 
 
 @app.get("/runs/{run_id}/download.zip")

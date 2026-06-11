@@ -75,19 +75,29 @@ def _event_line(event_info: Dict[str, str], lang: str) -> str:
     return line
 
 
+def _format_host_contacts(visit: Dict, lang: str) -> str:
+    phones = [phone for phone in visit.get("phones", []) if phone]
+    if not phones:
+        return "keine Telefonnummer angegeben" if lang == "de" else "no phone number listed"
+    return ", ".join(phones)
+
+
 def _format_visit(visit: Dict, lang: str) -> str:
     course = COURSE_LABELS[visit["course"]][lang]
     notes = visit["hints"] or ("keine Hinweise" if lang == "de" else "no notes")
+    contacts = _format_host_contacts(visit, lang)
     if lang == "de":
         return (
             f"- {course}\n"
             f"  Adresse: {visit['address']}\n"
-            f"  Hinweise zur Adresse: {notes}"
+            f"  Hinweise zur Adresse: {notes}\n"
+            f"  Kontakt Gastgeber*innen: {contacts}"
         )
     return (
         f"- {course}\n"
         f"  Address: {visit['address']}\n"
-        f"  Address notes: {notes}"
+        f"  Address notes: {notes}\n"
+        f"  Host contact phone number(s): {contacts}"
     )
 
 
@@ -141,7 +151,7 @@ def _build_language_section(schedule: Dict, event_info: Dict[str, str], lang: st
             lines.extend(["", f"Weitere Informationen: {additional}"])
         lines.extend([
             "",
-            "Wichtig: Aus Datenschutzgründen nennen wir in diesem Ablauf keine Namen der anderen Teams. Für die Stationen, die ihr besucht, seht ihr nur Gang, Adresse und Adresshinweise.",
+            "Hier seht ihr, welchen Gang ihr habt und wo ihr hin müsst. Außerdem findet ihr die Telefonnummern der Gastgeber*innen, falls ihr unterwegs Fragen habt oder den Eingang nicht direkt findet.",
             "",
             "Euer Ablauf:",
         ])
@@ -164,7 +174,7 @@ def _build_language_section(schedule: Dict, event_info: Dict[str, str], lang: st
             lines.extend(["", f"Additional information: {additional}"])
         lines.extend([
             "",
-            "Privacy note: This schedule does not include the names of other teams. For the stations you visit, it only lists the course, address, and address notes.",
+            "Here you can see which course you have and where you need to go. You will also find the hosts' phone numbers in case you have questions on the way or cannot find the entrance.",
             "",
             "Your schedule:",
         ])
@@ -246,6 +256,7 @@ def write_emails(
                     "course": match.course,
                     "address": host.full_address,
                     "hints": host.hints,
+                    "phones": [host.phone1, host.phone2],
                 }
             )
 

@@ -126,7 +126,7 @@ Auch die CLI schreibt immer in `data/output/runs/<run_id>/`.
 
 ## Ergebnisse
 
-- `emails/`: Individuelle E-Mail-Entwuerfe je Team, immer zweisprachig auf Deutsch und Englisch. Besuchsstationen nennen nur Gang, Adresse und Adresshinweise, keine Host-Namen, keine Telefonnummern und keine anderen Teamkontakte. Beim eigenen Gang werden Gastteams nur anonymisiert mit Ernaehrungs- und Allergiehinweisen aufgefuehrt.
+- `emails/`: Individuelle E-Mail-Entwuerfe je Team, immer zweisprachig auf Deutsch und Englisch. Besuchsstationen nennen Gang, Adresse, Adresshinweise und die angegebenen Telefonnummern der Gastgeber*innen. Beim eigenen Gang werden Gastteams nur anonymisiert mit Ernaehrungs- und Allergiehinweisen aufgefuehrt.
 - `maps/`: Interaktive HTML-Karten je Team. Die individuellen Karten nennen bei fremden Stationen nur Gang, Adresse und Adresshinweise, keine Gastgebernamen.
 - `aggregated_map.html`: Gesamtuebersicht fuer die Orga.
 - `plan.json`: Maschinenlesbarer Plan mit Hosts, Gaesten und Gaengen.
@@ -135,9 +135,10 @@ Auch die CLI schreibt immer in `data/output/runs/<run_id>/`.
 
 ## Hinweise und Grenzen
 
-- Der echte E-Mail-Versand ist noch nicht scharf geschaltet. Die App verwaltet aktuell E-Mail-Entwuerfe. Fuer SMTP/Provider-Versand sollten Zugangsdaten, Absenderadresse, Testmodus und Versandprotokoll separat konfiguriert werden.
+- Die Web-App kann E-Mail-Entwuerfe ueber `Senden` im lokalen Standard-Mailprogramm oeffnen. Empfaenger*innen, Betreff und Text werden vorausgefuellt; das tatsaechliche Abschicken passiert im Mailprogramm. Welches Programm geoeffnet wird oder ob eine Auswahl erscheint, entscheidet das Betriebssystem bzw. der Browser. Fuer echten SMTP/Provider-Versand sollten Zugangsdaten, Absenderadresse, Testmodus und Versandprotokoll separat konfiguriert werden.
 - Wenn die Teamzahl nicht durch drei teilbar ist, kuerzt der Optimizer standardmaessig die aktiven Teams auf das naechste Vielfache von drei. Wird `Restgruppen mit einplanen` bzw. `--include-remainder-teams` aktiviert, bleiben alle Teams aktiv; einzelne Stationen koennen dann aus 2 oder 4 Teams bestehen. Die gewaehlte Option steht im Manifest unter `include_remainder_teams`.
 - Teams mit gleicher normalisierter Adresse werden als harte Konflikte behandelt und duerfen nie gemeinsam an einem Gang teilnehmen. Die Anzahl erkannter Konflikte steht im Manifest unter `same_address_conflicts`.
+- Die Adressnormalisierung prueft Strasse, Adresszusatz und Hausnummerfeld gemeinsam. Wenn die Strasse keine Hausnummer enthaelt, wird der Adresszusatz als Hausnummer verwendet; wenn die Strasse bereits eine Hausnummer enthaelt, bleibt der Adresszusatz als Hinweis erhalten. Etagen-, WG- und Klingelhinweise werden in die Adresshinweise fuer E-Mails und Karten uebernommen.
 - Bei Adressen ohne brauchbare Hausnummer versucht der Import eine ungefaehre street-level Geocodierung. Solche Adressen sollten vor dem finalen Versand fachlich geprueft werden.
 - Die Standard-LimeSurvey-Feldnamen und Fragecodes sind in `src/importer.py` gemappt. Aendert sich der Fragebogen stark, sollte `field_mapping.json` genutzt oder das Mapping erweitert werden.
 - Geocoding-Ergebnisse werden in `data/intermediate/dinner.db` gecached.
