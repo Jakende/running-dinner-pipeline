@@ -79,18 +79,29 @@ def _format_visit(visit: Dict, lang: str) -> str:
     course = COURSE_LABELS[visit["course"]][lang]
     notes = visit["hints"] or ("keine Hinweise" if lang == "de" else "no notes")
     if lang == "de":
-        return f"- {course}: {visit['address']}\n  Hinweise zur Adresse: {notes}"
-    return f"- {course}: {visit['address']}\n  Address notes: {notes}"
+        return (
+            f"- {course}\n"
+            f"  Adresse: {visit['address']}\n"
+            f"  Hinweise zur Adresse: {notes}"
+        )
+    return (
+        f"- {course}\n"
+        f"  Address: {visit['address']}\n"
+        f"  Address notes: {notes}"
+    )
 
 
 def _format_hosting(hosting, lang: str) -> str:
     course = COURSE_LABELS[hosting.course][lang]
     guest_count = len(hosting.guests) * 2
+    guest_team_count = len(hosting.guests)
     if lang == "de":
+        team_phrase = "einem Gästeteam" if guest_team_count == 1 else f"{guest_team_count} Gästeteams"
         lines = [
-            f"- {course}: Ihr richtet diesen Gang an eurer Dinner-Location aus.",
-            f"  Rechnet mit {guest_count} Gästen aus {len(hosting.guests)} Teams.",
-            "  Ernährungsinfos für eure Gäste:",
+            f"- {course}",
+            "  Diesen Gang richtet ihr an eurer Dinner-Location aus.",
+            f"  Rechnet mit {guest_count} teilnehmenden Personen aus {team_phrase}.",
+            "  Bitte berücksichtigt dafür diese Ernährungs- und Allergiehinweise:",
         ]
         for idx, guest in enumerate(hosting.guests, 1):
             lines.append(
@@ -99,10 +110,12 @@ def _format_hosting(hosting, lang: str) -> str:
             )
         return "\n".join(lines)
 
+    team_phrase = "1 guest team" if guest_team_count == 1 else f"{guest_team_count} guest teams"
     lines = [
-        f"- {course}: You host this course at your dinner location.",
-        f"  Plan for {guest_count} guests from {len(hosting.guests)} teams.",
-        "  Dietary information for your guests:",
+        f"- {course}",
+        "  You host this course at your dinner location.",
+        f"  Please plan for {guest_count} participants from {team_phrase}.",
+        "  Please take these dietary and allergy notes into account:",
     ]
     for idx, guest in enumerate(hosting.guests, 1):
         lines.append(
@@ -120,12 +133,18 @@ def _build_language_section(schedule: Dict, event_info: Dict[str, str], lang: st
             "",
             "Hallo zusammen,",
             "",
-            "hier ist euer Plan für das Running Dinner.",
+            "schön, dass ihr beim Running Dinner dabei seid. Unten findet ihr euren persönlichen Ablauf für den Abend.",
+            "Damit alle Stationen gut funktionieren, achtet bitte besonders auf die Reihenfolge der Gänge, die angegebenen Adressen und die Hinweise zur jeweiligen Location.",
             _event_line(event_info, "de"),
         ]
         if additional:
             lines.extend(["", f"Weitere Informationen: {additional}"])
-        lines.extend(["", "Euer Ablauf:"])
+        lines.extend([
+            "",
+            "Wichtig: Aus Datenschutzgründen nennen wir in diesem Ablauf keine Namen der anderen Teams. Für die Stationen, die ihr besucht, seht ihr nur Gang, Adresse und Adresshinweise.",
+            "",
+            "Euer Ablauf:",
+        ])
     else:
         additional = (
             event_info.get("additional_info_en")
@@ -137,12 +156,18 @@ def _build_language_section(schedule: Dict, event_info: Dict[str, str], lang: st
             "",
             "Hello everyone,",
             "",
-            "here is your Running Dinner schedule.",
+            "we are happy that you are joining the Running Dinner. Below you will find your personal schedule for the evening.",
+            "Please pay close attention to the order of courses, the addresses, and the notes for each location so that the evening runs smoothly for everyone.",
             _event_line(event_info, "en"),
         ]
         if additional:
             lines.extend(["", f"Additional information: {additional}"])
-        lines.extend(["", "Your schedule:"])
+        lines.extend([
+            "",
+            "Privacy note: This schedule does not include the names of other teams. For the stations you visit, it only lists the course, address, and address notes.",
+            "",
+            "Your schedule:",
+        ])
 
     for course in [CourseType.STARTER, CourseType.MAIN, CourseType.DESSERT]:
         if schedule.get("hosting") and schedule["hosting"].course == course:
@@ -154,9 +179,23 @@ def _build_language_section(schedule: Dict, event_info: Dict[str, str], lang: st
             lines.append(_format_visit(visit, lang))
 
     if lang == "de":
-        lines.extend(["", "Viel Spaß!", "Euer Orga-Team"])
+        lines.extend([
+            "",
+            "Bitte schaut vor dem Losgehen noch einmal kurz in diesen Ablauf und plant genug Zeit für den Weg zwischen den Stationen ein.",
+            "Wir wünschen euch einen schönen Abend, gutes Essen und viele angenehme Begegnungen.",
+            "",
+            "Viele Grüße",
+            "Euer Orga-Team",
+        ])
     else:
-        lines.extend(["", "Have fun!", "Your organizing team"])
+        lines.extend([
+            "",
+            "Before you head out, please check this schedule once more and allow enough time to get from one station to the next.",
+            "We wish you a lovely evening, good food, and many enjoyable conversations.",
+            "",
+            "Best wishes",
+            "Your organizing team",
+        ])
 
     return "\n".join(lines)
 

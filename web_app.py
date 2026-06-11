@@ -164,6 +164,25 @@ def _page(title: str, body: str) -> HTMLResponse:
       min-height: 92px;
       resize: vertical;
     }}
+    .check-row {{
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 11px 12px;
+      margin: 0 0 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-soft);
+    }}
+    .check-row input {{
+      width: 18px;
+      height: 18px;
+      margin-top: 2px;
+      accent-color: var(--accent);
+      flex: 0 0 auto;
+    }}
+    .check-row label {{ margin: 0; }}
+    .check-row p {{ margin: 3px 0 0; font-size: 13px; color: var(--muted); }}
     input[type="file"]::file-selector-button {{
       min-height: 34px;
       padding: 0 12px;
@@ -461,7 +480,14 @@ def _slug(text: str) -> str:
     return "-".join(part for part in safe.split("-") if part)[:48] or "run"
 
 
-def _write_initial_manifest(run_dir: Path, run_id: str, input_path: Path, trials: int, event: dict):
+def _write_initial_manifest(
+    run_dir: Path,
+    run_id: str,
+    input_path: Path,
+    trials: int,
+    event: dict,
+    include_remainder_teams: bool,
+):
     manifest = {
         "run_id": run_id,
         "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -470,6 +496,7 @@ def _write_initial_manifest(run_dir: Path, run_id: str, input_path: Path, trials
         "parameters": {
             "trials": trials,
             "db": str(DATA_DIR / "intermediate" / "dinner.db"),
+            "include_remainder_teams": include_remainder_teams,
         },
         "event": event,
         "artifacts": {"run_dir": f"runs/{run_id}"},
@@ -583,6 +610,13 @@ def home():
         <input id="label" name="label" type="text" placeholder="summer-2026-final">
       </div>
     </div>
+    <div class="check-row">
+      <input id="include_remainder_teams" name="include_remainder_teams" type="checkbox" value="true">
+      <div>
+        <label for="include_remainder_teams">Restgruppen mit einplanen</label>
+        <p>Wenn die Teamzahl nicht durch drei teilbar ist, werden keine Teams ausgeschlossen. Einzelne Stationen koennen dann kleiner oder groesser sein.</p>
+      </div>
+    </div>
     <h3>Rahmeninformationen für die E-Mail</h3>
     <label for="event_title">Titel</label>
     <input id="event_title" name="event_title" type="text" value="Running Dinner">
@@ -648,6 +682,7 @@ async def create_run(
     input_file: UploadFile = File(...),
     trials: int = Form(5000),
     label: str = Form(""),
+    include_remainder_teams: bool = Form(False),
     event_title: str = Form("Running Dinner"),
     event_date: str = Form(""),
     event_time: str = Form(""),
@@ -678,7 +713,7 @@ async def create_run(
         "additional_info": event_info or "",
         "additional_info_en": event_info_en or "",
     }
-    _write_initial_manifest(run_dir, run_id, input_path, trials, event)
+    _write_initial_manifest(run_dir, run_id, input_path, trials, event, include_remainder_teams)
     (run_dir / "pipeline.log").write_text(
         f"[{datetime.now().isoformat(timespec='seconds')}] Run queued from Web App.\n",
         encoding="utf-8",
@@ -712,6 +747,8 @@ async def create_run(
         "--event-info-en",
         event_info_en,
     ]
+    if include_remainder_teams:
+        cmd.append("--include-remainder-teams")
     _run_pipeline_in_background(cmd, run_dir, run_id)
 
     return RedirectResponse(f"/runs/{run_id}", status_code=303)

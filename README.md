@@ -33,10 +33,11 @@ In der Web-App kann ein neuer Run gestartet werden:
 1. LimeSurvey-Datei hochladen: JSON, CSV oder XLSX.
 2. Anzahl der Optimierungsversuche setzen, empfohlen: `5000`.
 3. Optional ein Label vergeben.
-4. Rahmeninformationen fuer diesen Run eintragen: Titel, Datum, Startzeit und weitere Hinweise auf Deutsch und optional Englisch. Treffpunkt/Abschlussort ist optional und kann leer bleiben.
-5. Run starten.
-6. Das Run-Detail oeffnet sich sofort und zeigt waehrend der Pipeline einen laufenden Status, einen Spinner und die letzten Log-Zeilen.
-7. Validierung, Gesamtkarte, Teamkarten, E-Mail-Entwuerfe und ZIP-Download im Run-Detail pruefen.
+4. Optional `Restgruppen mit einplanen` aktivieren, wenn bei einer nicht durch drei teilbaren Teamzahl keine Teams ausgeschlossen werden sollen.
+5. Rahmeninformationen fuer diesen Run eintragen: Titel, Datum, Startzeit und weitere Hinweise auf Deutsch und optional Englisch. Treffpunkt/Abschlussort ist optional und kann leer bleiben.
+6. Run starten.
+7. Das Run-Detail oeffnet sich sofort und zeigt waehrend der Pipeline einen laufenden Status, einen Spinner und die letzten Log-Zeilen.
+8. Validierung, Gesamtkarte, Teamkarten, E-Mail-Entwuerfe und ZIP-Download im Run-Detail pruefen.
 
 ## Importformate
 
@@ -101,6 +102,12 @@ Optional kann eine stabile Run-ID gesetzt werden:
 python3 main.py --input "data/input/DEINE_DATEI.json" --run-id "probe-1" --trials 5000
 ```
 
+Wenn bei einer nicht durch drei teilbaren Teamzahl keine Teams ausgeschlossen werden sollen:
+
+```bash
+python3 main.py --input "data/input/DEINE_DATEI.json" --trials 5000 --include-remainder-teams
+```
+
 Rahmeninformationen fuer die E-Mail-Entwuerfe koennen ebenfalls uebergeben werden:
 
 ```bash
@@ -129,7 +136,7 @@ Auch die CLI schreibt immer in `data/output/runs/<run_id>/`.
 ## Hinweise und Grenzen
 
 - Der echte E-Mail-Versand ist noch nicht scharf geschaltet. Die App verwaltet aktuell E-Mail-Entwuerfe. Fuer SMTP/Provider-Versand sollten Zugangsdaten, Absenderadresse, Testmodus und Versandprotokoll separat konfiguriert werden.
-- Wenn die Teamzahl nicht durch drei teilbar ist, kuerzt der Optimizer aktuell die aktiven Teams auf das naechste Vielfache von drei. Das wird im Manifest als `inactive_team_ids` dokumentiert und sollte in der Web-App fachlich entschieden werden.
+- Wenn die Teamzahl nicht durch drei teilbar ist, kuerzt der Optimizer standardmaessig die aktiven Teams auf das naechste Vielfache von drei. Wird `Restgruppen mit einplanen` bzw. `--include-remainder-teams` aktiviert, bleiben alle Teams aktiv; einzelne Stationen koennen dann aus 2 oder 4 Teams bestehen. Die gewaehlte Option steht im Manifest unter `include_remainder_teams`.
 - Teams mit gleicher normalisierter Adresse werden als harte Konflikte behandelt und duerfen nie gemeinsam an einem Gang teilnehmen. Die Anzahl erkannter Konflikte steht im Manifest unter `same_address_conflicts`.
 - Bei Adressen ohne brauchbare Hausnummer versucht der Import eine ungefaehre street-level Geocodierung. Solche Adressen sollten vor dem finalen Versand fachlich geprueft werden.
 - Die Standard-LimeSurvey-Feldnamen und Fragecodes sind in `src/importer.py` gemappt. Aendert sich der Fragebogen stark, sollte `field_mapping.json` genutzt oder das Mapping erweitert werden.

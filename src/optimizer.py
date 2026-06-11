@@ -12,19 +12,32 @@ from .models import Team, DinnerPlan, MatchResult, CourseType
 logger = logging.getLogger(__name__)
 
 class DinnerOptimizer:
-    def __init__(self, teams: List[Team], end_coordinates: Tuple[float, float] = (48.400199, 11.720124)):
+    def __init__(
+        self,
+        teams: List[Team],
+        end_coordinates: Tuple[float, float] = (48.400199, 11.720124),
+        include_remainder_teams: bool = False,
+    ):
         self.teams = teams
         self.end_lat, self.end_lon = end_coordinates
         self.distance_matrix = {}
         self.distance_to_end = {}
+        self.include_remainder_teams = include_remainder_teams
         
-        # Ensure divisible by 3 by truncating (in real world, we might want to handle this differently, e.g. 4-person teams)
         self.active_teams = self._get_active_teams()
         self.address_conflicts = self._build_address_conflicts()
 
     def _get_active_teams(self) -> List[Team]:
         if len(self.teams) < 3:
             raise ValueError("Need at least 3 teams for a running dinner")
+
+        if self.include_remainder_teams:
+            if len(self.teams) % 3:
+                logger.info(
+                    "Including remainder teams with uneven dinner group sizes "
+                    f"({len(self.teams)} teams total)."
+                )
+            return self.teams
         
         limit = (len(self.teams) // 3) * 3
         if limit < len(self.teams):
@@ -97,6 +110,16 @@ class DinnerOptimizer:
             
         return None, float('inf')
 
+    def _guest_count_by_host(self, hosts: List[int], potential_guests: List[int], trial, course: str) -> Dict[int, int]:
+        base = len(potential_guests) // len(hosts)
+        remainder = len(potential_guests) % len(hosts)
+        counts = [base + (1 if idx < remainder else 0) for idx in range(len(hosts))]
+        if remainder:
+            seed = trial.suggest_int(f'guest_count_seed_{course}', 0, 10000)
+            rng = random.Random(seed)
+            rng.shuffle(counts)
+        return dict(zip(hosts, counts))
+
     def _attempt_assignment(self, hosts, potential_guests, existing_meetings, trial, course, strict=True):
         available = defaultdict(list)
         for h_id in hosts:
@@ -105,10 +128,10 @@ class DinnerOptimizer:
                     continue
                 available[h_id].append(g_id)
         
-        guests_per_host = len(potential_guests) // len(hosts)
+        guest_counts = self._guest_count_by_host(hosts, potential_guests, trial, course)
         
         for h_id in hosts:
-            if len(available[h_id]) < guests_per_host:
+            if len(available[h_id]) < guest_counts[h_id]:
                 return None
         
         # Strategy
@@ -117,19 +140,20 @@ class DinnerOptimizer:
         
         sorted_hosts = hosts.copy()
         if strategy == 'greedy':
-            sorted_hosts.sort(key=lambda h: len(available[h]))
+            sorted_hosts.sort(key=lambda h: (len(available[h]) - guest_counts[h], len(available[h])))
         elif strategy == 'random':
             seed = trial.suggest_int(f'seed_{strategy_suffix}', 0, 1000)
             random.seed(seed)
             random.shuffle(sorted_hosts)
             
-        return self._backtrack(sorted_hosts, 0, available, guests_per_host, set(), {}, existing_meetings)
+        return self._backtrack(sorted_hosts, 0, available, guest_counts, set(), {}, existing_meetings)
 
-    def _backtrack(self, hosts, idx, available, k, used_guests, current_assignment, existing_meetings):
+    def _backtrack(self, hosts, idx, available, guest_counts, used_guests, current_assignment, existing_meetings):
         if idx == len(hosts):
             return current_assignment
         
         host = hosts[idx]
+        k = guest_counts[host]
         candidates = [g for g in available[host] if g not in used_guests]
         
         # Try combinations of candidates for this host
@@ -161,13 +185,26 @@ class DinnerOptimizer:
             current_assignment[host] = list(combo)
             used_guests.update(combo)
             
-            res = self._backtrack(hosts, idx + 1, available, k, used_guests, current_assignment, existing_meetings)
+            res = self._backtrack(hosts, idx + 1, available, guest_counts, used_guests, current_assignment, existing_meetings)
             if res: return res
             
             used_guests.difference_update(combo)
             del current_assignment[host]
             
         return None
+
+    def _split_hosts_by_course(self, shuffled_ids: List[int]) -> Dict[CourseType, List[int]]:
+        courses = [CourseType.STARTER, CourseType.MAIN, CourseType.DESSERT]
+        base = len(shuffled_ids) // 3
+        remainder = len(shuffled_ids) % 3
+        sizes = [base + (1 if idx < remainder else 0) for idx in range(3)]
+
+        course_hosts = {}
+        offset = 0
+        for course, size in zip(courses, sizes):
+            course_hosts[course] = shuffled_ids[offset:offset + size]
+            offset += size
+        return course_hosts
 
     def _objective(self, trial):
         teams = self.active_teams
@@ -187,16 +224,7 @@ class DinnerOptimizer:
         rng = random.Random(seed)
         rng.shuffle(shuffled_ids)
         
-        n = len(teams) // 3
-        hosts_starter = shuffled_ids[:n]
-        hosts_main = shuffled_ids[n:2*n]
-        hosts_dessert = shuffled_ids[2*n:]
-        
-        course_hosts = {
-            CourseType.STARTER: hosts_starter,
-            CourseType.MAIN: hosts_main,
-            CourseType.DESSERT: hosts_dessert
-        }
+        course_hosts = self._split_hosts_by_course(shuffled_ids)
         
         # 2. Assign Guests
         assignments = [] # (course, host, [guests])

@@ -112,6 +112,11 @@ def main():
     parser.add_argument('--db', default='data/intermediate/dinner.db', help="Path to SQLite DB for cache")
     parser.add_argument('--trials', type=int, default=1000, help="Number of optimization trials")
     parser.add_argument('--run-id', help="Optional stable ID for this run")
+    parser.add_argument(
+        '--include-remainder-teams',
+        action='store_true',
+        help="Include teams even if the team count is not divisible by 3; some course groups may then be smaller or larger.",
+    )
     parser.add_argument('--event-title', default='Running Dinner', help="Event title for generated emails")
     parser.add_argument('--event-date', default='', help="Event date for generated emails")
     parser.add_argument('--event-time', default='', help="Event start time for generated emails")
@@ -138,6 +143,7 @@ def main():
         'parameters': {
             'trials': args.trials,
             'db': args.db,
+            'include_remainder_teams': args.include_remainder_teams,
         },
         'event': event_info,
         'artifacts': {
@@ -166,7 +172,7 @@ def main():
 
     # 2. Optimization
     logger.info("Step 2: Optimizing Plan")
-    optimizer = DinnerOptimizer(teams)
+    optimizer = DinnerOptimizer(teams, include_remainder_teams=args.include_remainder_teams)
     plan = optimizer.optimize(n_trials=args.trials)
     active_ids = {t.id for t in optimizer.active_teams}
     active_teams = optimizer.active_teams
